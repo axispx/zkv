@@ -84,6 +84,14 @@ fn execute(engine: *Engine, log: ?*Log, command: parser.Command, output: *std.Io
             if (log) |l| try l.appendClear();
             try output.writeAll("cleared\n");
         },
+        .compact => {
+            if (log) |l| {
+                try l.compact(engine);
+                try output.writeAll("compacted\n");
+            } else {
+                try output.writeAll("log disabled\n");
+            }
+        },
         .exists => |key| {
             if (engine.exists(key)) {
                 try output.writeAll("true\n");
@@ -261,8 +269,20 @@ test "repl clears values" {
         \\
     ,
         \\zkv> inserted
-        \\zkv> zkv> 0
+        \\zkv> cleared
+        \\zkv> 0
         \\zkv> false
+        \\zkv>
+    );
+}
+
+test "repl reports compact unavailable without log" {
+    try expectReplOutput(
+        \\compact
+        \\exit
+        \\
+    ,
+        \\zkv> log disabled
         \\zkv>
     );
 }

@@ -6,6 +6,7 @@ const parser = @import("parser.zig");
 pub const Log = struct {
     io: std.Io,
     file: std.Io.File,
+    path: []const u8,
 
     pub fn open(io: std.Io, path: []const u8) !Log {
         const cwd = std.Io.Dir.cwd();
@@ -24,6 +25,7 @@ pub const Log = struct {
         return .{
             .io = io,
             .file = file,
+            .path = path,
         };
     }
 
@@ -44,6 +46,7 @@ pub const Log = struct {
             switch (command) {
                 .put => |put| _ = try engine.put(put.key, put.value),
                 .delete => |key| _ = engine.delete(key),
+                .clear => engine.clear(),
                 else => unreachable,
             }
         }
@@ -84,6 +87,34 @@ pub const Log = struct {
 
         try writer.interface.writeAll("clear\n");
         try writer.interface.flush();
+    }
+
+    pub fn compact(self: *Log, engine: *const Engine) !void {
+        var tmp_path_buf: [std.Io.Dir.max_name_bytes]u8 = undefined;
+        const tmp_path = try std.fmt.bufPrint(&tmp_path_buf, "{s}.tmp", .{self.path});
+
+        const cwd = std.Io.Dir.cwd();
+
+        self.deinit();
+
+        {
+            var tmp = try Log.open(self.io, tmp_path);
+            defer tmp.deinit();
+
+            var it = engine.iterator();
+            while (it.next()) |entry| {
+                try tmp.appendPut(entry.key_ptr.*, entry.value_ptr.*);
+            }
+        }
+
+        cwd.deleteFile(self.io, self.path) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => return err,
+        };
+
+        try cwd.rename(tmp_path, cwd, self.path, self.io);
+
+        self.* = try Log.open(self.io, self.path);
     }
 };
 
@@ -157,6 +188,108 @@ test "log appends to existing file" {
         try log.appendPut("city", "toronto");
         log.deinit();
     }
+
+    var read_buf: [1024]u8 = undefined;
+    const contents = try readLogFile(path, &read_buf);
+
+    try std.testing.expectEqualStrings(
+        \\put name ashish
+        \\put city toronto
+        \\
+    , contents);
+}
+
+test "log replay does not compact automatically" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path = try tmpLogPath(&tmp, &path_buf);
+
+    {
+        var log = try Log.open(std.testing.io, path);
+        try log.appendPut("name", "ashish");
+        try log.appendPut("name", "zkv");
+        log.deinit();
+    }
+
+    var engine = Engine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    {
+        var log = try Log.open(std.testing.io, path);
+        try log.replay(&engine);
+        log.deinit();
+    }
+
+    try std.testing.expectEqualStrings("zkv", engine.get("name").?);
+
+    var read_buf: [1024]u8 = undefined;
+    const contents = try readLogFile(path, &read_buf);
+
+    try std.testing.expectEqualStrings(
+        \\put name ashish
+        \\put name zkv
+        \\
+    , contents);
+}
+
+test "log compacts history to current engine state" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path = try tmpLogPath(&tmp, &path_buf);
+
+    var engine = Engine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    var log = try Log.open(std.testing.io, path);
+    defer log.deinit();
+
+    _ = try engine.put("name", "ashish");
+    try log.appendPut("name", "ashish");
+
+    _ = try engine.put("name", "zkv");
+    try log.appendPut("name", "zkv");
+
+    _ = try engine.put("city", "toronto");
+    try log.appendPut("city", "toronto");
+
+    _ = engine.delete("city");
+    try log.appendDelete("city");
+
+    try log.compact(&engine);
+
+    var read_buf: [1024]u8 = undefined;
+    const contents = try readLogFile(path, &read_buf);
+
+    try std.testing.expectEqualStrings(
+        \\put name zkv
+        \\
+    , contents);
+}
+
+test "log appends after compaction" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path = try tmpLogPath(&tmp, &path_buf);
+
+    var engine = Engine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    var log = try Log.open(std.testing.io, path);
+    defer log.deinit();
+
+    _ = try engine.put("name", "ashish");
+    try log.appendPut("name", "ashish");
+
+    try log.compact(&engine);
+
+    _ = try engine.put("city", "toronto");
+    try log.appendPut("city", "toronto");
 
     var read_buf: [1024]u8 = undefined;
     const contents = try readLogFile(path, &read_buf);

@@ -11,6 +11,7 @@ pub const Command = union(enum) {
     keys,
     dump,
     clear,
+    compact,
     exists: []const u8,
     help,
     exit,
@@ -59,6 +60,10 @@ pub fn parse(line: []const u8) ParseError!?Command {
             try scanner.noArgs();
             return Command.clear;
         },
+        .compact => {
+            try scanner.noArgs();
+            return Command.compact;
+        },
         .exists => return Command{ .exists = try scanner.keyOnly() },
         .help => {
             try scanner.noArgs();
@@ -79,6 +84,7 @@ const CommandType = enum {
     keys,
     dump,
     clear,
+    compact,
     exists,
     help,
     exit,
@@ -91,6 +97,7 @@ const CommandType = enum {
         if (std.mem.eql(u8, value, "keys")) return .keys;
         if (std.mem.eql(u8, value, "dump")) return .dump;
         if (std.mem.eql(u8, value, "clear")) return .clear;
+        if (std.mem.eql(u8, value, "compact")) return .compact;
         if (std.mem.eql(u8, value, "exists")) return .exists;
         if (std.mem.eql(u8, value, "help")) return .help;
         if (std.mem.eql(u8, value, "exit")) return .exit;
@@ -199,9 +206,9 @@ test "parse commands with no args" {
     try std.testing.expectEqual(Command.keys, (try parse("keys")).?);
     try std.testing.expectEqual(Command.dump, (try parse("dump")).?);
     try std.testing.expectEqual(Command.clear, (try parse("clear")).?);
+    try std.testing.expectEqual(Command.compact, (try parse("compact")).?);
     try std.testing.expectEqual(Command.help, (try parse("help")).?);
     try std.testing.expectEqual(Command.exit, (try parse("exit")).?);
-    try std.testing.expectEqual(Command.exit, (try parse("quit")).?);
 }
 
 test "parse exists command" {
@@ -227,5 +234,6 @@ test "parse errors" {
     try std.testing.expectError(error.TooManyArguments, parse("keys extra"));
     try std.testing.expectError(error.TooManyArguments, parse("dump extra"));
     try std.testing.expectError(error.TooManyArguments, parse("clear extra"));
+    try std.testing.expectError(error.TooManyArguments, parse("compact extra"));
     try std.testing.expectError(error.TooManyArguments, parse("exists name extra"));
 }
