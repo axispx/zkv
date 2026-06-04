@@ -64,6 +64,29 @@ fn execute(engine: *Engine, log: ?*Log, command: parser.Command, output: *std.Io
             }
         },
         .count => try output.print("{d}\n", .{engine.count()}),
+        .keys => {
+            var it = engine.iterator();
+            while (it.next()) |entry| {
+                try output.print("{s}\n", .{entry.key_ptr.*});
+            }
+        },
+        .dump => {
+            var it = engine.iterator();
+            while (it.next()) |entry| {
+                try output.print("{s}: {s}\n", .{
+                    entry.key_ptr.*,
+                    entry.value_ptr.*,
+                });
+            }
+        },
+        .clear => engine.clear(),
+        .exists => |key| {
+            if (engine.exists(key)) {
+                try output.writeAll("true\n");
+            } else {
+                try output.writeAll("false\n");
+            }
+        },
         .help => try writeHelp(output),
         .exit => return true,
     }
@@ -179,6 +202,63 @@ test "repl stops on eof without exit" {
 test "repl handles final line without trailing newline" {
     try expectReplOutput("count",
         \\zkv> 0
+        \\zkv>
+    );
+}
+
+test "repl prints keys" {
+    try expectReplOutput(
+        \\put name ashish
+        \\keys
+        \\exit
+        \\
+    ,
+        \\zkv> inserted
+        \\zkv> name
+        \\zkv>
+    );
+}
+
+test "repl dumps key values" {
+    try expectReplOutput(
+        \\put name ashish
+        \\dump
+        \\exit
+        \\
+    ,
+        \\zkv> inserted
+        \\zkv> name: ashish
+        \\zkv>
+    );
+}
+
+test "repl checks whether keys exist" {
+    try expectReplOutput(
+        \\exists name
+        \\put name ashish
+        \\exists name
+        \\exit
+        \\
+    ,
+        \\zkv> false
+        \\zkv> inserted
+        \\zkv> true
+        \\zkv>
+    );
+}
+
+test "repl clears values" {
+    try expectReplOutput(
+        \\put name ashish
+        \\clear
+        \\count
+        \\exists name
+        \\exit
+        \\
+    ,
+        \\zkv> inserted
+        \\zkv> zkv> 0
+        \\zkv> false
         \\zkv>
     );
 }

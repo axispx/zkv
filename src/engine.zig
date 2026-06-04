@@ -17,12 +17,7 @@ pub const Engine = struct {
     }
 
     pub fn deinit(self: *Engine) void {
-        var it = self.map.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.value_ptr.*);
-            self.allocator.free(entry.key_ptr.*);
-        }
-
+        self.clear();
         self.map.deinit();
     }
 
@@ -62,6 +57,24 @@ pub const Engine = struct {
 
     pub fn count(self: *const Engine) u32 {
         return self.map.count();
+    }
+
+    pub fn iterator(self: *const Engine) std.StringHashMap([]const u8).Iterator {
+        return self.map.iterator();
+    }
+
+    pub fn exists(self: *const Engine, key: []const u8) bool {
+        return self.map.contains(key);
+    }
+
+    pub fn clear(self: *Engine) void {
+        var it = self.map.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+
+        self.map.clearRetainingCapacity();
     }
 };
 
@@ -111,4 +124,30 @@ test "engine stores owned copies" {
 
     try std.testing.expectEqualStrings("ashish", engine.get("name").?);
     try std.testing.expect(engine.get("city") == null);
+}
+
+test "engine checks whether keys exist" {
+    var engine = Engine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    try std.testing.expect(!engine.exists("name"));
+
+    _ = try engine.put("name", "ashish");
+
+    try std.testing.expect(engine.exists("name"));
+    try std.testing.expect(!engine.exists("city"));
+}
+
+test "engine clears all values" {
+    var engine = Engine.init(std.testing.allocator);
+    defer engine.deinit();
+
+    _ = try engine.put("name", "ashish");
+    _ = try engine.put("city", "toronto");
+
+    engine.clear();
+
+    try std.testing.expectEqual(@as(u32, 0), engine.count());
+    try std.testing.expect(!engine.exists("name"));
+    try std.testing.expect(!engine.exists("city"));
 }

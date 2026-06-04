@@ -8,6 +8,10 @@ pub const Command = union(enum) {
     get: []const u8,
     delete: []const u8,
     count,
+    keys,
+    dump,
+    clear,
+    exists: []const u8,
     help,
     exit,
 };
@@ -43,6 +47,19 @@ pub fn parse(line: []const u8) ParseError!?Command {
             try scanner.noArgs();
             return Command.count;
         },
+        .keys => {
+            try scanner.noArgs();
+            return Command.keys;
+        },
+        .dump => {
+            try scanner.noArgs();
+            return Command.dump;
+        },
+        .clear => {
+            try scanner.noArgs();
+            return Command.clear;
+        },
+        .exists => return Command{ .exists = try scanner.keyOnly() },
         .help => {
             try scanner.noArgs();
             return Command.help;
@@ -59,6 +76,10 @@ const CommandType = enum {
     get,
     delete,
     count,
+    keys,
+    dump,
+    clear,
+    exists,
     help,
     exit,
 
@@ -67,6 +88,10 @@ const CommandType = enum {
         if (std.mem.eql(u8, value, "get")) return .get;
         if (std.mem.eql(u8, value, "del")) return .delete;
         if (std.mem.eql(u8, value, "count")) return .count;
+        if (std.mem.eql(u8, value, "keys")) return .keys;
+        if (std.mem.eql(u8, value, "dump")) return .dump;
+        if (std.mem.eql(u8, value, "clear")) return .clear;
+        if (std.mem.eql(u8, value, "exists")) return .exists;
         if (std.mem.eql(u8, value, "help")) return .help;
         if (std.mem.eql(u8, value, "exit")) return .exit;
 
@@ -171,9 +196,21 @@ test "parse del command" {
 
 test "parse commands with no args" {
     try std.testing.expectEqual(Command.count, (try parse("count")).?);
+    try std.testing.expectEqual(Command.keys, (try parse("keys")).?);
+    try std.testing.expectEqual(Command.dump, (try parse("dump")).?);
+    try std.testing.expectEqual(Command.clear, (try parse("clear")).?);
     try std.testing.expectEqual(Command.help, (try parse("help")).?);
     try std.testing.expectEqual(Command.exit, (try parse("exit")).?);
     try std.testing.expectEqual(Command.exit, (try parse("quit")).?);
+}
+
+test "parse exists command" {
+    const command = (try parse("exists name")).?;
+
+    switch (command) {
+        .exists => |key| try std.testing.expectEqualStrings("name", key),
+        else => try std.testing.expect(false),
+    }
 }
 
 test "parse errors" {
@@ -182,8 +219,13 @@ test "parse errors" {
     try std.testing.expectError(error.MissingKey, parse("get"));
     try std.testing.expectError(error.MissingKey, parse("del"));
     try std.testing.expectError(error.MissingKey, parse("put"));
+    try std.testing.expectError(error.MissingKey, parse("exists"));
     try std.testing.expectError(error.MissingValue, parse("put name"));
     try std.testing.expectError(error.TooManyArguments, parse("get name extra"));
     try std.testing.expectError(error.TooManyArguments, parse("del name extra"));
     try std.testing.expectError(error.TooManyArguments, parse("count extra"));
+    try std.testing.expectError(error.TooManyArguments, parse("keys extra"));
+    try std.testing.expectError(error.TooManyArguments, parse("dump extra"));
+    try std.testing.expectError(error.TooManyArguments, parse("clear extra"));
+    try std.testing.expectError(error.TooManyArguments, parse("exists name extra"));
 }
