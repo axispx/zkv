@@ -79,7 +79,11 @@ fn execute(engine: *Engine, log: ?*Log, command: parser.Command, output: *std.Io
                 });
             }
         },
-        .clear => engine.clear(),
+        .clear => {
+            engine.clear();
+            if (log) |l| try l.appendClear();
+            try output.writeAll("cleared\n");
+        },
         .exists => |key| {
             if (engine.exists(key)) {
                 try output.writeAll("true\n");

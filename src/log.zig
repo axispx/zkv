@@ -74,6 +74,17 @@ pub const Log = struct {
         try writer.interface.print("del {s}\n", .{key});
         try writer.interface.flush();
     }
+
+    pub fn appendClear(self: *Log) !void {
+        var buf: [4096]u8 = undefined;
+        var writer = self.file.writerStreaming(self.io, &buf);
+
+        const stat = try self.file.stat(self.io);
+        try writer.seekTo(stat.size);
+
+        try writer.interface.writeAll("clear\n");
+        try writer.interface.flush();
+    }
 };
 
 fn tmpLogPath(tmp: *const std.testing.TmpDir, buffer: []u8) ![]const u8 {
@@ -102,6 +113,28 @@ test "log appends put and delete commands" {
     try std.testing.expectEqualStrings(
         \\put name ashish
         \\del name
+        \\
+    , contents);
+}
+
+test "log appends clear command" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const path = try tmpLogPath(&tmp, &path_buf);
+
+    var log = try Log.open(std.testing.io, path);
+    try log.appendPut("name", "ashish");
+    try log.appendClear();
+    log.deinit();
+
+    var read_buf: [1024]u8 = undefined;
+    const contents = try readLogFile(path, &read_buf);
+
+    try std.testing.expectEqualStrings(
+        \\put name ashish
+        \\clear
         \\
     , contents);
 }
