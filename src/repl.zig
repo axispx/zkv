@@ -121,7 +121,12 @@ fn writeHelp(output: *std.Io.Writer) !void {
         \\  put <key> <value>  store value under key
         \\  get <key>          print value for key
         \\  del <key>          delete key
+        \\  exists <key>       print whether key exists
         \\  count              print number of keys
+        \\  keys               print all keys
+        \\  dump               print all key-value pairs
+        \\  clear              delete all keys
+        \\  compact            rewrite log to current engine state
         \\  help               show this help
         \\  exit               quit
         \\

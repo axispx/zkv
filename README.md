@@ -18,7 +18,12 @@ zig build run
 put <key> <value>  store value under key
 get <key>          print value for key
 del <key>          delete key
+exists <key>       print whether key exists
 count              print number of keys
+keys               print all keys
+dump               print all key-value pairs
+clear              delete all keys
+compact            rewrite log to current engine state
 help               show help
 exit               quit
 ```
@@ -37,9 +42,12 @@ get greeting
 ```text
 put name ashish
 del name
+clear
 ```
 
 On startup, the log is replayed into the in-memory engine before the REPL starts. Reads and non-mutating commands are not written to the log.
+
+Run `compact` to rewrite the log so it contains only the current engine state. This removes stale `put` and `del` entries from earlier sessions.
 
 The log format is intentionally simple for now. It assumes keys do not contain whitespace and values do not contain newlines.
 
