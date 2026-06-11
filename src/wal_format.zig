@@ -1,3 +1,33 @@
+//! Binary WAL record format.
+//!
+//! Endianness: little-endian for all u32 fields (lengths, CRC).
+//!
+//! ## Record frame
+//!
+//!   [u32 payload_len][record body…][u32 crc32]
+//!
+//! payload_len = byte length of the record body (not including payload_len or crc32).
+//! crc32       = CRC-32 (IEEE / zlib) over the entire record body.
+//!
+//! ## Record body
+//!
+//!   [u8 record_type][type-specific data…]
+//!
+//! record_type: 1 = put, 2 = del, 3 = clear
+//!
+//! Type-specific data uses length-prefixed blobs: [u32 len][bytes…]
+//!   put:   [key][value]
+//!   del:   [key]
+//!   clear: (body is only the type byte)
+//!
+//! ## Example: put "hello" "world" (27 bytes)
+//!
+//!   13 00 00 00                   payload_len = 19
+//!   01                            put
+//!   05 00 00 00 68 65 6C 6C 6F    key "hello"
+//!   05 00 00 00 77 6F 72 6C 64    value "world"
+//!   18 09 F0 A4                   crc32(body)
+
 const std = @import("std");
 
 pub const wal_magic = "ZKVL";
